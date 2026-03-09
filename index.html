@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuietZone - Library Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --safe-color: #2ecc71;
+            --warn-color: #e74c3c;
+            --text-main: #2c3e50;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            transition: background-color 0.8s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--bg-color);
+        }
+
+        #main-container {
+            text-align: center;
+            padding: 2rem;
+            border-radius: 30px;
+            background: var(--card-bg);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            width: 85%;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 { font-weight: 300; color: var(--text-main); margin-bottom: 0.5rem; }
+        p { color: #7f8c8d; font-size: 0.9rem; }
+
+        #status-emoji {
+            font-size: 5rem;
+            margin: 20px 0;
+            display: block;
+        }
+
+        #status-text {
+            font-size: 1.5rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .btn-start {
+            background: var(--text-main);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-start:active { transform: scale(0.95); }
+
+        /* Sembunyikan container label asli tapi tetap berfungsi di latar belakang */
+        #label-container {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            opacity: 0.5;
+            display: none; /* Ubah ke 'block' jika ingin debug */
+        }
+
+        /* Animasi berdenyut saat berisik */
+        .pulse {
+            animation: pulse-animation 1.5s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="main-container">
+    <h1>QuietZone</h1>
+    <p>Monitoring Ketenangan Ruangan</p>
+    
+    <div id="status-emoji">🤫</div>
+    <div id="status-text">Siap Memonitor</div>
+    
+    <button class="btn-start" type="button" onclick="init()">MULAI MONITOR</button>
+    
+    <div id="label-container"></div>
+</div>
+
+<script type="text/javascript">
+    // GANTI URL INI dengan link dari Teachable Machine kamu
+    const URL = "https://teachablemachine.withgoogle.com/models/cZ3jQQ8vP/"
+    async function createModel() {
+        const checkpointURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        const recognizer = speechCommands.create(
+            "BROWSER_FFT",
+            undefined,
+            checkpointURL,
+            metadataURL);
+
+        await recognizer.ensureModelLoaded();
+        return recognizer;
+    }
+
+    async function init() {
+        const btn = document.querySelector('.btn-start');
+        btn.innerHTML = "MENDENGARKAN...";
+        btn.style.opacity = "0.5";
+        btn.disabled = true;
+
+        const recognizer = await createModel();
+        const classLabels = recognizer.wordLabels(); 
+        const labelContainer = document.getElementById("label-container");
+        const statusText = document.getElementById("status-text");
+        const statusEmoji = document.getElementById("status-emoji");
+        const body = document.body;
+        const mainBox = document.getElementById("main-container");
+
+        for (let i = 0; i < classLabels.length; i++) {
+            labelContainer.appendChild(document.createElement("div"));
+        }
+
+        recognizer.listen(result => {
+            const scores = result.scores;
+            
+            for (let i = 0; i < classLabels.length; i++) {
+                const probability = result.scores[i].toFixed(2);
+                const label = classLabels[i];
+
+                // LOGIKA VISUAL
+                // Asumsi label di Teachable Machine adalah "Sunyi" dan "Berisik"
+                // Silakan sesuaikan nama label "Berisik" atau "Noisy" di bawah ini
+                if (label === "Berisik" && probability > 0.80) {
+                    body.style.backgroundColor = "#e74c3c"; // Merah
+                    statusText.innerText = "JANGAN BERISIK!";
+                    statusText.style.color = "#ffffff";
+                    statusEmoji.innerText = "📢";
+                    mainBox.classList.add("pulse");
+                } 
+                else if (label === "Sunyi" && probability > 0.80) {
+                    body.style.backgroundColor = "#2ecc71"; // Hijau
+                    statusText.innerText = "SUASANA TENANG";
+                    statusText.style.color = "#2c3e50";
+                    statusEmoji.innerText = "🍃";
+                    mainBox.classList.remove("pulse");
+                }
+
+                labelContainer.childNodes[i].innerHTML = label + ": " + probability;
+            }
+        }, {
+            includeSpectrogram: true,
+            probabilityThreshold: 0.75,
+            invokeCallbackOnNoiseAndUnknown: true,
+            overlapFactor: 0.50
+        });
+    }
+</script>
+
+</body>
+</html>
